@@ -217,6 +217,8 @@ if __name__ == "__main__":
     )
     directory_tropes_in_media = (
         directory_tropes_in_media.query("media_url.notna()")
+        .sort_values("media_year")
+        .drop_duplicates(["trope_name", "media_name", "category"])  # Duplicates occur when entries in one franchise link to the same page
         [["trope_name", "media_trope_description", "media_name", "media_year", "category", "media_url"]]
     )
     directory_tropes_in_media.to_csv("data/media_did_tropes", sep="|",index=False)
