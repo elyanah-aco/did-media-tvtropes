@@ -13,12 +13,7 @@ from tenacity.retry import retry_if_exception_type
 from tenacity.stop import stop_after_attempt
 from tenacity.wait import wait_random
 
-from const import DISABILITY_TROPE_URLS, VIDEO_GAME_URLS, FILM_URLS
-
-__logger = logging.getLogger(__name__)
-
-# Maybe DID-specifically!
-
+from const import DID_TROPE_DIRECTORY_URLS, VIDEO_GAME_URLS, FILM_URLS
 
 @retry(
     wait=wait_random(min=2, max=5),
@@ -27,6 +22,13 @@ __logger = logging.getLogger(__name__)
     )
 
 def parse_page_as_soup(url: str) -> BeautifulSoup:
+    """
+    Parse URL contents as a BeautifulSoup object.
+
+    :param str url: URL to get data for
+    :return: BeautifulSoup of URL
+    :rtype: BeautifulSoup
+    """
     resp = requests.get(url)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "lxml")
@@ -35,8 +37,12 @@ def parse_page_as_soup(url: str) -> BeautifulSoup:
 def get_directory_tropes(trope_directory_urls: list[str]) -> pd.DataFrame:
     """
     Get tropes URLs and descriptions for all tropes from a specific category page.
+
+    :param list[str] trope_directory_urls: List of trope directory URLs
+    :return: DataFrame of entries for trope in trope directories
+    :rtype: pd.DataFrame
     """
-    directory_tropes: dict[str, str] = {
+    did_tropes: dict[str, str] = {
         "trope_name": [],
         "trope_url": [],
         "trope_description": [],
@@ -69,14 +75,23 @@ def get_directory_tropes(trope_directory_urls: list[str]) -> pd.DataFrame:
             ]
             trope_description = " ".join(trope_description)
 
-            directory_tropes["trope_name"].append(trope_name.strip())
-            directory_tropes["trope_url"].append(trope_url)
-            directory_tropes["trope_description"].append(trope_description.strip())
+            did_tropes["trope_name"].append(trope_name.strip())
+            did_tropes["trope_url"].append(trope_url)
+            did_tropes["trope_description"].append(trope_description.strip())
 
-        directory_tropes_db = pd.DataFrame().from_dict(directory_tropes)
-        return directory_tropes_db
+        did_tropes_db = pd.DataFrame().from_dict(did_tropes)
+        return did_tropes_db
 
 def get_media_urls(media_directory_urls: list[str], media_category: str) -> pd.DataFrame():
+    """
+    Create a DataFrame of media entries with URLs and years from media directories.
+
+    :param list[str] media_directory_urls: List of media directory URLs
+    :param str category: Media category to get entries for; is used to exclude
+        entries in page that don't belong to the specific category
+    :return: DataFrame of media entries
+    :rtype: pd.DataFrame
+    """
     media_urls_dict: dict[str, list[Any]] = {
         "media_name": [],
         "media_year": [],
@@ -111,7 +126,14 @@ def get_media_urls(media_directory_urls: list[str], media_category: str) -> pd.D
     return media_entries_db
 
     
-def get_tropes_in_media_page(media_url: str) -> dict[str, list[Any]]:
+def get_tropes_in_media_page(media_url: str) -> pd.DataFrame:
+    """
+    Gets all tropes within a certain media entry.
+
+    :param str media_url: URL for media entry's TvTropes page
+    :return: DataFrame of all tropes for the current entry
+    :rtype: pd.DataFrame
+    """
     media_page_entries: dict[str, list[Any]] = {
         "media_url": [],
         "trope_name": [],
@@ -155,6 +177,14 @@ def get_tropes_in_media_page(media_url: str) -> dict[str, list[Any]]:
     return media_page_db
     
 def add_cleaned_trope_entry(trope_tag: Tag, cleaned_tropes_list: list[str]) -> list[str]:
+    """
+    Appends bulleted entry descriptions to the trope's main description.
+
+    :param Tag trope_tag: HTML tag of the current trope entry/description
+    :param list[str] cleaned_tropes_list: List of all currently cleaned trope descriptions
+    :return: cleaned_tropes_list appended by the new cleaned trope entry
+    :rtype: list[str]
+    """
     is_a_main_entry = re.search("a class", str(trope_tag)[:13])
     if is_a_main_entry:
         cleaned_tropes_list.append(trope_tag.text)
@@ -164,27 +194,30 @@ def add_cleaned_trope_entry(trope_tag: Tag, cleaned_tropes_list: list[str]) -> l
         pass
 
 if __name__ == "__main__":
-    
-    directory_tropes_db = get_directory_tropes(DISABILITY_TROPE_URLS)
+
+    did_tropes_db = get_directory_tropes(DID_TROPE_DIRECTORY_URLS)
+    did_tropes_db.to_csv("data/did_tropes", sep="|", index=False)
+    print("DID tropes saved.")
+
     video_games_db = get_media_urls(VIDEO_GAME_URLS, "VideoGame")
     film_db = get_media_urls(FILM_URLS, "Film")
     media_db = pd.concat([video_games_db, film_db], ignore_index=True)
 
     media_tropes_list: list[pd.DataFrame] = []
-    for media_url in film_db["media_url"]:
+    for media_url in media_db["media_url"]:
         media_tropes = get_tropes_in_media_page(media_url)
         media_tropes_list.append(media_tropes)
     media_tropes_db = pd.concat(media_tropes_list, ignore_index=True)
-    media_tropes_db = media_tropes_db.merge(film_db, how="inner", on="media_url")
+    media_tropes_db = media_tropes_db.merge(media_db, how="inner", on="media_url")
 
-    directory_tropes_in_media = directory_tropes_db.merge(
+    directory_tropes_in_media = did_tropes_db.merge(
         media_tropes_db,
         how="left",
         on="trope_name"
     )
-    directory_tropes_in_media = directory_tropes_in_media[directory_tropes_in_media["media_url"].notna()]
-    directory_tropes_in_media.to_csv(
-        "media_tropes",
-        sep="|",
-        index=False,
+    directory_tropes_in_media = (
+        directory_tropes_in_media.query("media_url.notna()")
+        [["trope_name", "media_trope_description", "media_name", "media_year", "category", "media_url"]]
     )
+    directory_tropes_in_media.to_csv("data/media_did_tropes", sep="|",index=False)
+    print("Entries for DID tropes in media saved.")
