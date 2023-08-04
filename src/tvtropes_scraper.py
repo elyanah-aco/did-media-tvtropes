@@ -13,7 +13,7 @@ from tenacity.retry import retry_if_exception_type
 from tenacity.stop import stop_after_attempt
 from tenacity.wait import wait_random
 
-from const import DID_TROPE_DIRECTORY_URLS, VIDEO_GAME_URLS, FILM_URLS
+from const import DISABILITY_TROPE_DIRECTORY_URLS, VIDEO_GAME_URLS, FILM_URLS, ANIME_URLS
 
 @retry(
     wait=wait_random(min=2, max=5),
@@ -77,10 +77,10 @@ def get_directory_tropes(trope_directory_urls: list[str]) -> pd.DataFrame:
 
             did_tropes["trope_name"].append(trope_name.strip())
             did_tropes["trope_url"].append(trope_url)
-            did_tropes["trope_description"].append(trope_description.strip())
+            did_tropes["trope_description"].append(trope_description.replace("\n", "").strip())
 
-        did_tropes_db = pd.DataFrame().from_dict(did_tropes)
-        return did_tropes_db
+        disability_tropes_db = pd.DataFrame().from_dict(did_tropes)
+        return disability_tropes_db
 
 def get_media_urls(media_directory_urls: list[str], media_category: str) -> pd.DataFrame():
     """
@@ -171,7 +171,7 @@ def get_tropes_in_media_page(media_url: str) -> pd.DataFrame:
             trope_name, media_trope_description = cleaned_trope.split(":", maxsplit=1)
             media_page_entries["media_url"].append(media_url)
             media_page_entries["trope_name"].append(trope_name.strip())
-            media_page_entries["media_trope_description"].append(media_trope_description.strip())
+            media_page_entries["media_trope_description"].append(media_trope_description.replace("\n", "").strip())
 
     media_page_db = pd.DataFrame().from_dict(media_page_entries)
     return media_page_db
@@ -195,13 +195,14 @@ def add_cleaned_trope_entry(trope_tag: Tag, cleaned_tropes_list: list[str]) -> l
 
 if __name__ == "__main__":
 
-    did_tropes_db = get_directory_tropes(DID_TROPE_DIRECTORY_URLS)
-    did_tropes_db.to_csv("data/did_tropes", sep="|", index=False)
-    print("DID tropes saved.")
+    disability_tropes_db = get_directory_tropes(DISABILITY_TROPE_DIRECTORY_URLS)
+    disability_tropes_db.to_csv("data/disability_tropes", sep="|", index=False)
+    print("Disability tropes saved.")
 
     video_games_db = get_media_urls(VIDEO_GAME_URLS, "VideoGame")
     film_db = get_media_urls(FILM_URLS, "Film")
-    media_db = pd.concat([video_games_db, film_db], ignore_index=True)
+    anime_db = get_media_urls(ANIME_URLS, "Anime")
+    media_db = pd.concat([video_games_db, film_db, anime_db], ignore_index=True)
 
     media_tropes_list: list[pd.DataFrame] = []
     for media_url in media_db["media_url"]:
@@ -210,16 +211,16 @@ if __name__ == "__main__":
     media_tropes_db = pd.concat(media_tropes_list, ignore_index=True)
     media_tropes_db = media_tropes_db.merge(media_db, how="inner", on="media_url")
 
-    directory_tropes_in_media = did_tropes_db.merge(
+    disability_tropes_in_media = disability_tropes_db.merge(
         media_tropes_db,
         how="left",
         on="trope_name"
     )
-    directory_tropes_in_media = (
-        directory_tropes_in_media.query("media_url.notna()")
+    disability_tropes_in_media = (
+        disability_tropes_in_media.query("media_url.notna()")
         .sort_values("media_year")
-        .drop_duplicates(["trope_name", "media_name", "category"])  # Duplicates occur when entries in one franchise link to the same page
+        .drop_duplicates(["trope_name", "media_trope_description", "media_url"])  # Duplicates occur when entries in one franchise link to the same page
         [["trope_name", "media_trope_description", "media_name", "media_year", "category", "media_url"]]
     )
-    directory_tropes_in_media.to_csv("data/media_did_tropes", sep="|",index=False)
-    print("Entries for DID tropes in media saved.")
+    disability_tropes_in_media.to_csv("data/media_disability_tropes", sep="|",index=False)
+    print("Entries for disability tropes in media saved.")

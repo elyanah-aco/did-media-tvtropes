@@ -13,9 +13,9 @@ from nltk.corpus import wordnet as wn
 
 def load_media_trope_corpus(media_trope_fp: str) -> pd.DataFrame:
     """
-    Load dataframe of DID tropes in media.
+    Load dataframe of disability tropes in media.
 
-    :param str media_trope_fp: Filepath for DID trope data.
+    :param str media_trope_fp: Filepath for disability trope data.
     """
     return pd.read_csv(
         media_trope_fp,
@@ -33,21 +33,28 @@ def lemmatize_token(token: str) -> str:
 def preprocess_into_tokens(trope_description: str, minimum_token_length: int = 4) -> list[str]:
 
     stop_words = stopwords.words("english")
-    tokens = nltk.word_tokenize(trope_description)
+    tokens = nltk.pos_tag(trope_description.split())
     tokens = [
-        lemmatize_token(token)
-        for token in tokens
-        if lemmatize_token(token) not in stop_words
+        lemmatize_token(token).lower()
+        for token, pos in tokens
+        if lemmatize_token(token).lower() not in stop_words
         and len(token) >= minimum_token_length
         and token.isalpha()
+        and pos != "NNP"
     ]
     return tokens
 
 def create_topic_model(
         tokenized_descriptions: list[list[str]],
-        num_topics: int = 5
+        num_topics: int = 10,
+        no_below=5,
+        no_above=0.7,
         ):
+
     dictionary = Dictionary(tokenized_descriptions)
+    dictionary.filter_extremes(no_below=no_below, no_above=no_above)
+    dictionary.compactify()
+
     bow_descriptions = [
         dictionary.doc2bow(desc)
         for desc in tokenized_descriptions
@@ -59,7 +66,7 @@ def create_topic_model(
         eval_every=10,
         id2word=dictionary,
         random_state=1,
-        iterations=5000,
+        iterations=500,
     )
     return lda_model
 
@@ -67,7 +74,7 @@ def write_top_tokens_per_topic(
         lda_model: LdaModel,
         topic_output_tmpl: str,
         category: str,
-        num_topics: int = 5,
+        num_topics: int = 10,
         num_words: int = 10,
 ) -> None:
     topic_output_fp = topic_output_tmpl.format(category=category)
@@ -86,20 +93,20 @@ def write_top_tokens_per_topic(
     topic_file.close()
 
 if __name__ == "__main__":
-    did_media_tropes = load_media_trope_corpus("data/media_did_tropes")
+    disability_media_tropes = load_media_trope_corpus("data/media_disability_tropes")
 
-    did_media_tropes["media_trope_description"] = did_media_tropes["media_trope_description"].str.strip().str.lower()
-    did_media_tropes["tokenized_description"] = did_media_tropes["media_trope_description"].apply(preprocess_into_tokens)
+    disability_media_tropes["media_trope_description"] = disability_media_tropes["media_trope_description"].str.strip()
+    disability_media_tropes["tokenized_description"] = disability_media_tropes["media_trope_description"].apply(preprocess_into_tokens)
     
     topic_output_tmpl = "data/topics/{category}_topics"
-    lda_model = create_topic_model(did_media_tropes["tokenized_description"].tolist())
-    write_top_tokens_per_topic(lda_model, topic_output_tmpl, "All")
+    lda_model = create_topic_model(disability_media_tropes["tokenized_description"].tolist())
+    write_top_tokens_per_topic(lda_model, topic_output_tmpl, "all")
 
     for category in ("Film", "VideoGame"):
         print(f"Generating {category} topics...")
-        cat_did_tropes = did_media_tropes[did_media_tropes["category"] == category]
+        cat_did_tropes = disability_media_tropes[disability_media_tropes["category"] == category]
         lda_model = create_topic_model(cat_did_tropes["tokenized_description"].tolist())
-        write_top_tokens_per_topic(lda_model, topic_output_tmpl, category)
+        write_top_tokens_per_topic(lda_model, topic_output_tmpl, category.lower())
         
 
 
