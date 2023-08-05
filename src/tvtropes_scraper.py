@@ -13,14 +13,19 @@ from tenacity.retry import retry_if_exception_type
 from tenacity.stop import stop_after_attempt
 from tenacity.wait import wait_random
 
-from const import DISABILITY_TROPE_DIRECTORY_URLS, VIDEO_GAME_URLS, FILM_URLS, ANIME_URLS
+from const import (
+    DISABILITY_TROPE_DIRECTORY_URLS,
+    VIDEO_GAME_URLS,
+    FILM_URLS,
+    ANIME_URLS,
+)
+
 
 @retry(
     wait=wait_random(min=2, max=5),
     stop=stop_after_attempt(10),
     retry=retry_if_exception_type(requests.exceptions.RequestException),
-    )
-
+)
 def parse_page_as_soup(url: str) -> BeautifulSoup:
     """
     Parse URL contents as a BeautifulSoup object.
@@ -33,6 +38,7 @@ def parse_page_as_soup(url: str) -> BeautifulSoup:
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "lxml")
     return soup
+
 
 def get_directory_tropes(trope_directory_urls: list[str]) -> pd.DataFrame:
     """
@@ -52,9 +58,7 @@ def get_directory_tropes(trope_directory_urls: list[str]) -> pd.DataFrame:
         soup = parse_page_as_soup(dir_url)
 
         trope_listings = [
-            list
-            for list in soup.select("li:not(.plus)")
-            if list.select("a.twikilink")
+            list for list in soup.select("li:not(.plus)") if list.select("a.twikilink")
         ]
         for trope in trope_listings:
             trope_url = "https://tvtropes.org" + trope.find("a")["href"]
@@ -71,18 +75,24 @@ def get_directory_tropes(trope_directory_urls: list[str]) -> pd.DataFrame:
                 par_tag.text.encode("ascii", "ignore").decode()
                 for par_tag in start_of_trope_description.find_all_next("p")
                 if par_tag in end_of_trope_description.find_all_previous("p")
-                and len(par_tag.text.split()) >= 10  # To further remove non-description paragraph texts
+                and len(par_tag.text.split())
+                >= 10  # To further remove non-description paragraph texts
             ]
             trope_description = " ".join(trope_description)
 
             did_tropes["trope_name"].append(trope_name.strip())
             did_tropes["trope_url"].append(trope_url)
-            did_tropes["trope_description"].append(trope_description.replace("\n", "").strip())
+            did_tropes["trope_description"].append(
+                trope_description.replace("\n", "").strip()
+            )
 
         disability_tropes_db = pd.DataFrame().from_dict(did_tropes)
         return disability_tropes_db
 
-def get_media_urls(media_directory_urls: list[str], media_category: str) -> pd.DataFrame():
+
+def get_media_urls(
+    media_directory_urls: list[str], media_category: str
+) -> pd.DataFrame():
     """
     Create a DataFrame of media entries with URLs and years from media directories.
 
@@ -96,23 +106,19 @@ def get_media_urls(media_directory_urls: list[str], media_category: str) -> pd.D
         "media_name": [],
         "media_year": [],
         "media_url": [],
-        }
+    }
 
     for dir_url in media_directory_urls:
         soup = parse_page_as_soup(dir_url)
         folders = [
             folder
             for folder in soup.select("div.folderlabel")
-            if re.search("\d", folder.text) 
-            and re.search("folder\d", folder["onclick"])
+            if re.search("\d", folder.text) and re.search("folder\d", folder["onclick"])
         ]
         for folder in folders:
             folder_id = re.findall("folder\d+", folder["onclick"])[0]
             year = re.findall("\d+", folder.text)[0]
-            year_folder = soup.find(
-                "div",
-                {"class": "folder", "id": folder_id}
-            )
+            year_folder = soup.find("div", {"class": "folder", "id": folder_id})
             for media_entry in year_folder.select("a.twikilink"):
                 if media_category in media_entry["href"]:
                     media_urls_dict["media_name"].append(media_entry.text.strip())
@@ -120,12 +126,12 @@ def get_media_urls(media_directory_urls: list[str], media_category: str) -> pd.D
                     media_urls_dict["media_url"].append(
                         "https://tvtropes.org" + media_entry["href"]
                     )
-                    
+
     media_entries_db = pd.DataFrame().from_dict(media_urls_dict)
     media_entries_db["category"] = media_category
     return media_entries_db
 
-    
+
 def get_tropes_in_media_page(media_url: str) -> pd.DataFrame:
     """
     Gets all tropes within a certain media entry.
@@ -138,7 +144,7 @@ def get_tropes_in_media_page(media_url: str) -> pd.DataFrame:
         "media_url": [],
         "trope_name": [],
         "media_trope_description": [],
-        }
+    }
 
     soup = parse_page_as_soup(media_url)
     start_of_trope_listings = soup.find("h2")
@@ -153,7 +159,9 @@ def get_tropes_in_media_page(media_url: str) -> pd.DataFrame:
 
     cleaned_tropes: list[str] = []
     for trope in trope_listings:
-        if re.search("Tropes [A-Z]", trope.find("a")["href"]):  # Entry tropes are in another page 
+        if re.search(
+            "Tropes [A-Z]", trope.find("a")["href"]
+        ):  # Entry tropes are in another page
             separate_trope_page_url = "https://tvtropes.org" + trope.find("a")["href"]
             separate_page_soup = parse_page_as_soup(separate_trope_page_url)
             separate_page_tropes = [
@@ -171,12 +179,17 @@ def get_tropes_in_media_page(media_url: str) -> pd.DataFrame:
             trope_name, media_trope_description = cleaned_trope.split(":", maxsplit=1)
             media_page_entries["media_url"].append(media_url)
             media_page_entries["trope_name"].append(trope_name.strip())
-            media_page_entries["media_trope_description"].append(media_trope_description.replace("\n", "").strip())
+            media_page_entries["media_trope_description"].append(
+                media_trope_description.replace("\n", "").strip()
+            )
 
     media_page_db = pd.DataFrame().from_dict(media_page_entries)
     return media_page_db
-    
-def add_cleaned_trope_entry(trope_tag: Tag, cleaned_tropes_list: list[str]) -> list[str]:
+
+
+def add_cleaned_trope_entry(
+    trope_tag: Tag, cleaned_tropes_list: list[str]
+) -> list[str]:
     """
     Appends bulleted entry descriptions to the trope's main description.
 
@@ -193,8 +206,8 @@ def add_cleaned_trope_entry(trope_tag: Tag, cleaned_tropes_list: list[str]) -> l
     else:
         pass
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     disability_tropes_db = get_directory_tropes(DISABILITY_TROPE_DIRECTORY_URLS)
     disability_tropes_db.to_csv("data/disability_tropes", sep="|", index=False)
     print("Disability tropes saved.")
@@ -212,15 +225,25 @@ if __name__ == "__main__":
     media_tropes_db = media_tropes_db.merge(media_db, how="inner", on="media_url")
 
     disability_tropes_in_media = disability_tropes_db.merge(
-        media_tropes_db,
-        how="left",
-        on="trope_name"
+        media_tropes_db, how="left", on="trope_name"
     )
     disability_tropes_in_media = (
         disability_tropes_in_media.query("media_url.notna()")
         .sort_values("media_year")
-        .drop_duplicates(["trope_name", "media_trope_description", "media_url"])  # Duplicates occur when entries in one franchise link to the same page
-        [["trope_name", "media_trope_description", "media_name", "media_year", "category", "media_url"]]
+        .drop_duplicates(
+            ["trope_name", "media_trope_description", "media_url"]
+        )[  # Duplicates occur when entries in one franchise link to the same page
+            [
+                "trope_name",
+                "media_trope_description",
+                "media_name",
+                "media_year",
+                "category",
+                "media_url",
+            ]
+        ]
     )
-    disability_tropes_in_media.to_csv("data/media_disability_tropes", sep="|",index=False)
+    disability_tropes_in_media.to_csv(
+        "data/media_disability_tropes", sep="|", index=False
+    )
     print("Entries for disability tropes in media saved.")
