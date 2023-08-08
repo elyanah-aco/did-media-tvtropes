@@ -1,0 +1,10 @@
+0|head|weapon|wheelchair|character|place|fact|body|life|hook|hand
+1|weapon|leader|woman|fact|wheelchair|character|place|body|hook|hand
+2|wheelchair|body|hook|hand|fact|character|place|weapon|leader|woman
+3|film|head|woman|hand|place|wheelchair|character|body|fact|leader
+4|hook|fact|place|weapon|wheelchair|character|body|life|hand|leader
+5|life|hook|head|hand|weapon|place|wheelchair|character|body|woman
+6|character|hook|weapon|fact|wheelchair|place|body|life|hand|leader
+7|hand|leader|hook|head|place|weapon|wheelchair|character|body|life
+8|body|woman|wheelchair|character|fact|place|weapon|life|hook|hand
+9|place|woman|body|hand|fact|wheelchair|character|weapon|hook|leader

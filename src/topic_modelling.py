@@ -91,8 +91,6 @@ def create_dictionary_and_bow(
     dictionary.compactify()
 
     bow_descriptions = [dictionary.doc2bow(desc) for desc in tokenized_descriptions]
-    print(bow_descriptions)
-
     return (dictionary, bow_descriptions)
 
 
@@ -117,7 +115,7 @@ def create_lda_model(
         eval_every=10,
         id2word=dictionary,
         random_state=1,
-        terations=500,
+        iterations=500,
     )
     write_top_tokens_per_topic(lda_model, output_fp, num_topics)
 
@@ -219,38 +217,42 @@ def write_top_tokens_per_topic(
 
 
 if __name__ == "__main__":
-    disability_media_tropes = load_trope_corpus("data/media_disability_tropes")
+    disability_tropes = load_trope_corpus("data/disability_tropes")
+    disability_media_examples = load_trope_corpus("data/media_disability_tropes")
+    disability_media_examples = disability_media_examples.merge(
+        disability_tropes, how="left", on="trope_name"
+    )
 
-    disability_media_tropes["media_trope_description"] = disability_media_tropes[
+    disability_media_examples["media_trope_description"] = disability_media_examples[
         "media_trope_description"
     ].str.strip()
-    disability_media_tropes["tokenized_description"] = disability_media_tropes[
+    disability_media_examples["tokenized_description"] = disability_media_examples[
         "media_trope_description"
     ].apply(preprocess_into_tokens)
 
-    topic_output_tmpl = "data/topics/{model}/{category}_topics"
-    for category in ("All", "Anime", "Film", "VideoGame"):
-        print(f"Generating {category} topics...")
-        if category != "All":
-            cat_disability_tropes = disability_media_tropes[
-                disability_media_tropes["category"] == category
+    topic_output_tmpl = "data/topics/{model}/{label}_topics"
+    for label in ("all", "victim", "supercrip", "threat", "neutral"):
+        print(f"Generating {label} topics...")
+        if label != "all":
+            cat_disability_tropes = disability_media_examples[
+                disability_media_examples["label"] == label
             ]
         else:
-            cat_disability_tropes = disability_media_tropes.copy()
+            cat_disability_tropes = disability_media_examples.copy()
 
         tokenized_descriptions = cat_disability_tropes["tokenized_description"].tolist()
         dictionary, bow_descriptions = create_dictionary_and_bow(tokenized_descriptions)
         num_topics = 10
 
         print("Performing topic modelling via LDA...")
-        lda_output_fp = topic_output_tmpl.format(category=category.lower(), model="lda")
+        lda_output_fp = topic_output_tmpl.format(label=label.lower(), model="lda")
         create_lda_model(
             dictionary, bow_descriptions, num_topics=num_topics, output_fp=lda_output_fp
         )
         print()
 
         print("Performing topic modelling via NMF...")
-        nmf_output_fp = topic_output_tmpl.format(category=category.lower(), model="nmf")
+        nmf_output_fp = topic_output_tmpl.format(label=label.lower(), model="nmf")
         nmf_model = create_nmf_model(
             dictionary, bow_descriptions, num_topics=num_topics, output_fp=nmf_output_fp
         )
@@ -261,7 +263,7 @@ if __name__ == "__main__":
 
         print("Performing topic modelling via GDSMM...")
         gdsmm_output_fp = topic_output_tmpl.format(
-            category=category.lower(), model="gdsmm"
+            label=label.lower(), model="gdsmm"
         )
         create_gdsmm_model(
             tokenized_descriptions, num_topics=10, output_fp=gdsmm_output_fp
